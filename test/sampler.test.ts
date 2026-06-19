@@ -1,4 +1,4 @@
-import { detectLanguage, shouldIgnorePath } from '../src/sampler.js';
+import { categorizeFile, detectLanguage, prioritizeCandidates, shouldIgnorePath } from '../src/sampler.js';
 
 describe('sampler helpers', () => {
   it('ignores dependency dirs and lockfiles', () => {
@@ -12,5 +12,25 @@ describe('sampler helpers', () => {
     expect(detectLanguage('src/server.ts')).toBe('TypeScript');
     expect(detectLanguage('Dockerfile')).toBe('Dockerfile');
     expect(detectLanguage('image.png')).toBeNull();
+  });
+
+  it('categorizes reviewable files', () => {
+    expect(categorizeFile('README.md', 'Markdown')).toBe('documentation');
+    expect(categorizeFile('docker-compose.yml', 'YAML')).toBe('config');
+    expect(categorizeFile('src/server.ts', 'TypeScript')).toBe('source');
+  });
+
+  it('prioritizes source files when high-priority docs exist', () => {
+    const prioritized = prioritizeCandidates(
+      [
+        { path: 'README.md', language: 'Markdown', category: 'documentation', bytes: 100, priority: 100 },
+        { path: 'package.json', language: 'JSON', category: 'config', bytes: 100, priority: 100 },
+        { path: 'src/index.ts', language: 'TypeScript', category: 'source', bytes: 100, priority: 38 },
+        { path: 'src/server.ts', language: 'TypeScript', category: 'source', bytes: 100, priority: 38 }
+      ],
+      2
+    );
+
+    expect(prioritized.some((file) => file.category === 'source')).toBe(true);
   });
 });

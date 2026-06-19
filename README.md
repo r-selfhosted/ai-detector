@@ -4,7 +4,7 @@ Flags r/selfhosted megathread submissions that may contain undisclosed AI-genera
 
 ## Review service
 
-This repository contains a stateless Fastify service that accepts one Git repository URL, reviews a sampled clone with OpenRouter, and returns a structured JSON assessment for n8n.
+This repository contains a stateless Fastify service that accepts one Git repository URL, reviews a sampled clone with OpenRouter, and returns a structured JSON assessment for Windmill.
 
 ### Setup
 
@@ -63,14 +63,22 @@ curl -X POST http://localhost:8080/review \
     "repo_url": "https://github.com/user/project",
     "comment_id": "abc123",
     "comment_permalink": "https://reddit.com/r/selfhosted/comments/xxxx/abc123/",
+    "comment_body": "Reddit comment text, including any AI/no-AI disclosure claims.",
+    "comment_claimed_no_ai": false,
     "author": "some_user"
   }'
 ```
 
-Completed reviews are returned in the HTTP response and logged as structured container output. The service does not send Discord messages directly; n8n owns Discord/moderator routing.
+Completed reviews are returned in the HTTP response and logged as structured container output. The service does not send Discord messages directly; Windmill owns Discord/moderator routing.
 
-## n8n workflow
+The response separates likely AI involvement from undisclosed-risk:
 
-Import `workflows/r-selfhosted-ai-detector.n8n.json` into n8n to poll the r/selfhosted megathread and route qualifying review results to Discord.
+- `confidence`: risk that AI-generated code is undisclosed
+- `ai_assistance_likelihood`: likelihood that AI assistance was used at all
+- `disclosed_ai_use` and `disclosure_evidence`: whether the repo or comment disclosed AI use
+- `risk_level` and `review_recommendation`: moderator-facing triage fields
+- `sample_summary` and `limitations`: sampling coverage and caveats
 
-See `docs/n8n-workflow.md` for required n8n environment variables, import steps, deduplication notes, and the manual test checklist.
+## Windmill workflow
+
+Use Windmill to poll the r/selfhosted megathread, deduplicate comments, extract repository URLs, call `/review`, and route qualifying review results to Discord or moderator destinations.

@@ -23,7 +23,7 @@ export async function reviewRepository(body: ReviewRequestBody, dependencies: De
 
   try {
     repoPath = await dependencies.cloneRepository(body.repo_url);
-    const [metadata, sampledFiles] = await Promise.all([
+    const [metadata, sample] = await Promise.all([
       dependencies.analyzeMetadata(repoPath),
       dependencies.sampleRepository(repoPath)
     ]);
@@ -32,20 +32,31 @@ export async function reviewRepository(body: ReviewRequestBody, dependencies: De
       context: {
         comment_id: body.comment_id,
         comment_permalink: body.comment_permalink,
+        comment_body: body.comment_body,
+        comment_claimed_no_ai: body.comment_claimed_no_ai,
         author: body.author
       },
       metadata,
-      sampledFiles
+      sample
     });
 
     return {
       confidence: assessment.confidence,
+      risk_level: assessment.risk_level,
+      review_recommendation: assessment.review_recommendation,
+      ai_assistance_likelihood: assessment.ai_assistance_likelihood,
+      disclosed_ai_use: assessment.disclosed_ai_use,
+      disclosure_evidence: assessment.disclosure_evidence,
       findings: assessment.findings,
+      limitations: assessment.limitations,
       metadata_signals: metadata,
+      sample_summary: sample.summary,
       disclosure: DISCLOSURE,
       repo_url: body.repo_url,
       ...(body.comment_id ? { comment_id: body.comment_id } : {}),
       ...(body.comment_permalink ? { comment_permalink: body.comment_permalink } : {}),
+      ...(body.comment_body ? { comment_body: body.comment_body } : {}),
+      ...(body.comment_claimed_no_ai !== undefined ? { comment_claimed_no_ai: body.comment_claimed_no_ai } : {}),
       ...(body.author ? { author: body.author } : {})
     };
   } finally {

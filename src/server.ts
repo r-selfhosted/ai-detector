@@ -10,6 +10,8 @@ const reviewRequestSchema = z.object({
   repo_url: z.string().min(1),
   comment_id: z.string().optional(),
   comment_permalink: z.string().optional(),
+  comment_body: z.string().optional(),
+  comment_claimed_no_ai: z.boolean().optional(),
   author: z.string().optional()
 });
 
@@ -64,6 +66,8 @@ export function buildServer({ config, dependencies = createDependencies(config) 
         repo_url: body.repo_url,
         comment_id: body.comment_id,
         comment_permalink: body.comment_permalink,
+        has_comment_body: Boolean(body.comment_body),
+        comment_claimed_no_ai: body.comment_claimed_no_ai,
         author: body.author
       },
       'Review started'
@@ -77,10 +81,18 @@ export function buildServer({ config, dependencies = createDependencies(config) 
           repo_url: result.repo_url,
           comment_id: result.comment_id,
           comment_permalink: result.comment_permalink,
+          has_comment_body: Boolean(result.comment_body),
+          comment_claimed_no_ai: result.comment_claimed_no_ai,
           author: result.author,
           duration_ms: Date.now() - startedAt,
           confidence: result.confidence,
+          risk_level: result.risk_level,
+          review_recommendation: result.review_recommendation,
+          ai_assistance_likelihood: result.ai_assistance_likelihood,
+          disclosed_ai_use: result.disclosed_ai_use,
           findings: result.findings,
+          limitations: result.limitations,
+          sample_summary: result.sample_summary,
           metadata_signals: result.metadata_signals
         },
         'Review completed'

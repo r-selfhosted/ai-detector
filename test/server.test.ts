@@ -36,10 +36,37 @@ function deps(overrides: Partial<Dependencies> = {}): Dependencies {
       few_giant_commits: false,
       recent_commit_count: 1
     })),
-    sampleRepository: vi.fn(async () => [
-      { path: 'README.md', language: 'Markdown', bytes: 10, priority: 100, content: 'hello', truncated: false }
-    ]),
-    assessWithModel: vi.fn(async () => ({ confidence: 72, findings: ['README is generic'] })),
+    sampleRepository: vi.fn(async () => ({
+      files: [
+        {
+          path: 'README.md',
+          language: 'Markdown',
+          category: 'documentation',
+          bytes: 10,
+          priority: 100,
+          content: 'hello',
+          truncated: false
+        }
+      ],
+      summary: {
+        sampled_file_count: 1,
+        sampled_source_file_count: 0,
+        reviewable_file_count: 1,
+        reviewable_source_file_count: 0,
+        docs_only_sample: true,
+        sampled_files: ['README.md']
+      }
+    })),
+    assessWithModel: vi.fn(async () => ({
+      confidence: 72,
+      risk_level: 'moderate',
+      review_recommendation: 'review_recommended',
+      ai_assistance_likelihood: 84,
+      disclosed_ai_use: 'unknown',
+      disclosure_evidence: [],
+      findings: ['README is generic'],
+      limitations: ['Only documentation was sampled']
+    })),
     ...overrides
   };
 }
@@ -62,16 +89,25 @@ describe('server', () => {
       headers: { authorization: 'Bearer secret' },
       payload: {
         repo_url: 'https://github.com/a/b',
-        comment_id: 'abc123'
+        comment_id: 'abc123',
+        comment_body: 'No AI was used.',
+        comment_claimed_no_ai: true
       }
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       confidence: 72,
+      risk_level: 'moderate',
+      review_recommendation: 'review_recommended',
+      ai_assistance_likelihood: 84,
+      disclosed_ai_use: 'unknown',
       findings: ['README is generic'],
+      limitations: ['Only documentation was sampled'],
       repo_url: 'https://github.com/a/b',
-      comment_id: 'abc123'
+      comment_id: 'abc123',
+      comment_body: 'No AI was used.',
+      comment_claimed_no_ai: true
     });
     expect(dependencies.cleanupRepository).toHaveBeenCalledWith('/tmp/repo');
   });

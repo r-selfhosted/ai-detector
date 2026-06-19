@@ -3,7 +3,7 @@ import { basename, extname, join } from 'node:path';
 import { AppConfig } from './config.js';
 import { ReviewServiceError } from './errors.js';
 import { runCommand } from './process.js';
-import { SampledFile } from './types.js';
+import { RepositorySample, SampledFile } from './types.js';
 
 const IGNORED_DIRS = new Set([
   '.git',
@@ -64,10 +64,12 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
 const ENTRYPOINT_RE = /(^|\/)(index|main|app|server|api|routes?|handlers?|cli)\.[^.]+$/i;
 const MANIFEST_RE = /(^|\/)(package\.json|composer\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|docker-compose\.ya?ml|README[^/]*)$/i;
 
-export async function sampleRepository(repoPath: string, config: AppConfig): Promise<SampledFile[]> {
+type CandidateFile = Omit<SampledFile, 'content' | 'truncated'>;
+
+export async function sampleRepository(repoPath: string, config: AppConfig): Promise<RepositorySample> {
   const result = await runCommand('git', ['ls-files', '-z'], { cwd: repoPath });
   const trackedFiles = result.stdout.split('\0').filter(Boolean);
-  const candidates: Array<Omit<SampledFile, 'content' | 'truncated'>> = [];
+  const candidates: CandidateFile[] = [];
   let scanned = 0;
 
   for (const path of trackedFiles) {
@@ -99,6 +101,7 @@ export async function sampleRepository(repoPath: string, config: AppConfig): Pro
     candidates.push({
       path,
       language,
+      category: categorizeFile(path, language),
       bytes: fileStat.size,
       priority: scorePath(path)
     });
@@ -106,7 +109,7 @@ export async function sampleRepository(repoPath: string, config: AppConfig): Pro
 
   const sampled: SampledFile[] = [];
   let totalChars = 0;
-  const prioritized = candidates.sort((a, b) => b.priority - a.priority || a.path.localeCompare(b.path));
+  const prioritized = prioritizeCandidates(candidates, config.MAX_FILES_SAMPLED);
 
   for (const candidate of prioritized) {
     if (sampled.length >= config.MAX_FILES_SAMPLED || totalChars >= config.MAX_SAMPLE_CHARS) {
@@ -128,7 +131,20 @@ export async function sampleRepository(repoPath: string, config: AppConfig): Pro
     throw new ReviewServiceError('non_code_repo', 'No reviewable source, documentation, or config files found', 422);
   }
 
-  return sampled;
+  const sampledSourceFileCount = sampled.filter((file) => file.category === 'source').length;
+  const reviewableSourceFileCount = candidates.filter((file) => file.category === 'source').length;
+
+  return {
+    files: sampled,
+    summary: {
+      sampled_file_count: sampled.length,
+      sampled_source_file_count: sampledSourceFileCount,
+      reviewable_file_count: candidates.length,
+      reviewable_source_file_count: reviewableSourceFileCount,
+      docs_only_sample: sampledSourceFileCount === 0,
+      sampled_files: sampled.map((file) => file.path)
+    }
+  };
 }
 
 export function shouldIgnorePath(path: string): boolean {
@@ -166,6 +182,38 @@ function scorePath(path: string): number {
   const language = detectLanguage(path);
   const sourceBonus = language && !['Markdown', 'JSON', 'YAML', 'TOML'].includes(language) ? 40 : 20;
   return sourceBonus - depthPenalty;
+}
+
+export function categorizeFile(path: string, language: string): SampledFile['category'] {
+  if (language === 'Markdown') {
+    return 'documentation';
+  }
+
+  if (MANIFEST_RE.test(path) || ['JSON', 'YAML', 'TOML', 'Dockerfile'].includes(language)) {
+    return 'config';
+  }
+
+  return 'source';
+}
+
+export function prioritizeCandidates(candidates: CandidateFile[], maxFilesSampled: number): CandidateFile[] {
+  const byPriority = [...candidates].sort((a, b) => b.priority - a.priority || a.path.localeCompare(b.path));
+  const selected = new Map<string, CandidateFile>();
+  const sourceCandidates = byPriority.filter((file) => file.category === 'source');
+  const minimumSourceFiles = Math.min(sourceCandidates.length, Math.max(1, Math.floor(maxFilesSampled / 2)));
+
+  for (const file of sourceCandidates.slice(0, minimumSourceFiles)) {
+    selected.set(file.path, file);
+  }
+
+  for (const file of byPriority) {
+    if (selected.size >= maxFilesSampled) {
+      break;
+    }
+    selected.set(file.path, file);
+  }
+
+  return Array.from(selected.values()).sort((a, b) => b.priority - a.priority || a.path.localeCompare(b.path));
 }
 
 function isLikelyBinary(buffer: Buffer): boolean {
