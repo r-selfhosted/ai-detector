@@ -16,8 +16,23 @@ cp .env.example .env
 Required environment variables:
 
 - `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL`
+- `OPENROUTER_MODEL` (recommended starting point: `anthropic/claude-sonnet-4.5`)
 - `REVIEW_SERVICE_TOKEN`
+
+Optional OpenRouter tuning variables:
+
+- `OPENROUTER_TEMPERATURE` (default: `0.1`; use `0` for the most consistent moderator-review output)
+- `OPENROUTER_MAX_TOKENS` (default: `1500`)
+
+For Docker Compose, put these values in `.env`; `docker-compose.yml` loads them through `env_file` instead of listing secrets directly in the `environment` block:
+
+```dotenv
+OPENROUTER_API_KEY=...
+OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
+OPENROUTER_TEMPERATURE=0
+OPENROUTER_MAX_TOKENS=1500
+REVIEW_SERVICE_TOKEN=...
+```
 
 ### Run
 
@@ -26,6 +41,12 @@ npm run dev
 ```
 
 The service listens on `PORT` or `8080` by default.
+
+With Docker Compose:
+
+```bash
+docker compose up --build
+```
 
 ### Endpoints
 
