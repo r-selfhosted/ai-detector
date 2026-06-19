@@ -47,3 +47,9 @@ curl -X POST http://localhost:8080/review \
 ```
 
 Completed reviews are returned in the HTTP response and logged as structured container output. The service does not send Discord messages directly; n8n owns Discord/moderator routing.
+
+## n8n workflow
+
+Import `workflows/r-selfhosted-ai-detector.n8n.json` into n8n to poll the r/selfhosted megathread and route qualifying review results to Discord.
+
+See `docs/n8n-workflow.md` for required n8n environment variables, import steps, deduplication notes, and the manual test checklist.

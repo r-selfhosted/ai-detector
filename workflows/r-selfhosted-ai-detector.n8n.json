@@ -1,0 +1,303 @@
+{
+  "name": "r/selfhosted Megathread AI-Code Detector",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": "={{ Number($env.AI_DETECTOR_POLL_MINUTES || 10) }}"
+            }
+          ]
+        }
+      },
+      "id": "7b3b645f-4c57-487e-a85a-93f83dd703e0",
+      "name": "Every 10 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/selfhosted/search.json?q=flair_name%3A%22New%20Project%20Megathread%22&restrict_sr=on&sort=new&t=month&limit=5",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "r-selfhosted-ai-detector-n8n/0.1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "356678e1-996b-414b-a40e-ed16d20a0812",
+      "name": "Search New Project Megathreads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const listing = $input.first().json;\nconst flairName = ($env.AI_DETECTOR_MEGATHREAD_FLAIR || 'New Project Megathread').toLowerCase();\nconst posts = (listing?.data?.children ?? []).map((child) => child.data).filter(Boolean);\nconst monthIndexes = new Map(Object.entries({ jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11 }));\nfunction parseWeekDate(title) {\n  const match = String(title || '').match(/week\\s+of\\s+(\\d{1,2})\\s+([a-z]{3,9})\\s+(\\d{4})/i);\n  if (!match) return null;\n  const monthIndex = monthIndexes.get(match[2].toLowerCase());\n  if (monthIndex === undefined) return null;\n  return new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[1])));\n}\nconst now = new Date();\nconst oneDayMs = 24 * 60 * 60 * 1000;\nconst currentWindowMs = 8 * oneDayMs;\nconst flairMatches = posts.filter((post) => String(post.link_flair_text || '').toLowerCase() === flairName);\nconst datedMatches = flairMatches.map((post) => ({ post, weekDate: parseWeekDate(post.title) })).filter(({ weekDate }) => weekDate && weekDate.getTime() <= now.getTime() + oneDayMs && now.getTime() - weekDate.getTime() < currentWindowMs).sort((a, b) => b.weekDate.getTime() - a.weekDate.getTime());\nconst selected = datedMatches[0]?.post ?? flairMatches.sort((a, b) => Number(b.created_utc || 0) - Number(a.created_utc || 0))[0];\nif (!selected) {\n  return [];\n}\nreturn [{\n  json: {\n    thread_id: selected.id,\n    thread_fullname: selected.name,\n    thread_title: selected.title,\n    thread_flair: selected.link_flair_text,\n    thread_permalink: `https://www.reddit.com${selected.permalink}`,\n    comments_url: `https://www.reddit.com/comments/${selected.id}.json?limit=500&sort=new`\n  }\n}];"
+      },
+      "id": "d50b1ca9-1a87-47c1-b743-e48e21c1e346",
+      "name": "Select Active Megathread",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.comments_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "r-selfhosted-ai-detector-n8n/0.1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "32793267-52cf-4531-856b-e05ca7dfadfe",
+      "name": "Fetch Megathread Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst staticData = $getWorkflowStaticData('global');\nstaticData.processedCommentIds = staticData.processedCommentIds || {};\nconst seen = staticData.processedCommentIds;\nconst thread = Array.isArray(response) ? response[0]?.data?.children?.[0]?.data : undefined;\nconst comments = Array.isArray(response) ? response[1]?.data?.children ?? [] : [];\nconst threadFullname = thread?.name;\nconst repoPattern = /https?:\\/\\/(?:www\\.)?(?:github\\.com|gitlab\\.com|codeberg\\.org)\\/[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+(?:\\.git)?(?:[/?#][^\\s)\\]}>'\"]*)?|https?:\\/\\/git\\.sr\\.ht\\/[~A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+(?:\\.git)?(?:[/?#][^\\s)\\]}>'\"]*)?/gi;\nconst output = [];\nfor (const child of comments) {\n  if (child.kind !== 't1') continue;\n  const comment = child.data;\n  if (!comment || comment.parent_id !== threadFullname) continue;\n  if (seen[comment.id]) continue;\n  const body = comment.body || '';\n  const repoUrls = [...new Set((body.match(repoPattern) || []).map((url) => url.replace(/[.,;:]+$/, '')))];\n  if (repoUrls.length === 0) continue;\n  seen[comment.id] = new Date().toISOString();\n  for (const repoUrl of repoUrls) {\n    output.push({\n      json: {\n        repo_url: repoUrl,\n        comment_id: comment.id,\n        comment_permalink: `https://www.reddit.com${comment.permalink}`,\n        author: comment.author,\n        thread_id: thread?.id,\n        thread_title: thread?.title\n      }\n    });\n  }\n}\nreturn output;"
+      },
+      "id": "d35cf590-6283-4739-9094-420b29cfef2c",
+      "name": "Extract New Repo Comments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REVIEW_SERVICE_URL.replace(/\\/$/, '') + '/review' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.REVIEW_SERVICE_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { repo_url: $json.repo_url, comment_id: $json.comment_id, comment_permalink: $json.comment_permalink, author: $json.author } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "9a11a5ef-4074-4d0b-a66c-3dd46b1060a4",
+      "name": "Review Repository",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "bbab285d-dbcd-4f72-a920-5d0cb5ec8e97",
+              "leftValue": "={{ Number($json.confidence || 0) }}",
+              "rightValue": "={{ Number($env.AI_DETECTOR_CONFIDENCE_THRESHOLD || 70) }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d40f6a4c-f5b8-4f47-a063-7833a8b95ca8",
+      "name": "Meets Confidence Threshold",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AI_DETECTOR_DISCORD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { username: 'r/selfhosted AI Detector', content: '**AI-code detector review queued for moderators**\\n' + 'Comment: ' + ($json.comment_permalink || 'unknown') + '\\n' + 'Repository: ' + $json.repo_url + '\\n' + 'Confidence: ' + Math.round(Number($json.confidence || 0)) + '%\\n\\n' + '**Findings**\\n' + (($json.findings || []).map((finding) => '- ' + finding).join('\\n') || '- No specific findings returned') + '\\n\\n' + '**Metadata signals**\\n```json\\n' + JSON.stringify($json.metadata_signals || {}, null, 2).slice(0, 1500) + '\\n```\\n' + ($json.disclosure || '') } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "0f78d9b1-0e87-4637-8616-4bd8afe568ad",
+      "name": "Send Discord Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        -80
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 10 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Search New Project Megathreads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search New Project Megathreads": {
+      "main": [
+        [
+          {
+            "node": "Select Active Megathread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Active Megathread": {
+      "main": [
+        [
+          {
+            "node": "Fetch Megathread Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Megathread Comments": {
+      "main": [
+        [
+          {
+            "node": "Extract New Repo Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract New Repo Comments": {
+      "main": [
+        [
+          {
+            "node": "Review Repository",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Repository": {
+      "main": [
+        [
+          {
+            "node": "Meets Confidence Threshold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meets Confidence Threshold": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "f9f0f003-8b05-4b8f-b150-73359d60ccff",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "r-selfhosted-ai-detector",
+  "tags": []
+}
