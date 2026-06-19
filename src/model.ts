@@ -57,7 +57,8 @@ export async function assessWithModel(input: ModelAssessmentInput, config: AppCo
   });
 
   if (!response.ok) {
-    throw new ReviewServiceError('model_failed', `OpenRouter request failed with status ${response.status}`, 502);
+    const errorDetail = await readOpenRouterError(response);
+    throw new ReviewServiceError('model_failed', errorDetail, 502);
   }
 
   const payload = (await response.json()) as {
@@ -92,6 +93,29 @@ export function parseModelAssessment(content: string): ModelAssessment {
     confidence: Math.max(0, Math.min(100, Math.round(assessment.confidence))),
     findings: assessment.findings.filter((finding): finding is string => typeof finding === 'string').slice(0, 12)
   };
+}
+
+export async function readOpenRouterError(response: Response): Promise<string> {
+  const fallback = `OpenRouter request failed with status ${response.status}`;
+
+  try {
+    const text = await response.text();
+    if (!text.trim()) {
+      return fallback;
+    }
+
+    return `${fallback}: ${sanitizeOpenRouterError(text)}`;
+  } catch {
+    return fallback;
+  }
+}
+
+export function sanitizeOpenRouterError(text: string): string {
+  return text
+    .replace(/sk-or-[A-Za-z0-9_-]+/g, 'sk-or-[redacted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1_000);
 }
 
 function buildPrompt(input: ModelAssessmentInput): string {

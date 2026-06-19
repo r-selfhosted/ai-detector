@@ -1,5 +1,5 @@
 import { ReviewServiceError } from '../src/errors.js';
-import { parseModelAssessment } from '../src/model.js';
+import { parseModelAssessment, sanitizeOpenRouterError } from '../src/model.js';
 
 describe('parseModelAssessment', () => {
   it('clamps confidence and keeps string findings', () => {
@@ -10,5 +10,11 @@ describe('parseModelAssessment', () => {
 
   it('throws model_failed for malformed JSON', () => {
     expect(() => parseModelAssessment('{nope')).toThrow(ReviewServiceError);
+  });
+
+  it('sanitizes OpenRouter error details', () => {
+    const result = sanitizeOpenRouterError('Bad key sk-or-secret-token\nwith extra   whitespace');
+
+    expect(result).toBe('Bad key sk-or-[redacted] with extra whitespace');
   });
 });
