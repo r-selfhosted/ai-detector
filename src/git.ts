@@ -22,14 +22,34 @@ export function validateRepoUrl(repoUrl: string): void {
   }
 }
 
-export async function cloneRepository(repoUrl: string, config: AppConfig): Promise<string> {
+export function normalizeRepoUrlForClone(repoUrl: string): string {
   validateRepoUrl(repoUrl);
+
+  const parsed = new URL(repoUrl);
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  const parts = parsed.pathname.split('/').filter(Boolean);
+
+  if (['github.com', 'gitlab.com', 'codeberg.org'].includes(host) && parts.length >= 2) {
+    const repo = parts[1].replace(/\.git$/i, '');
+    return `${parsed.protocol}//${parsed.host}/${parts[0]}/${repo}`;
+  }
+
+  if (host === 'git.sr.ht' && parts.length >= 2) {
+    const repo = parts[1].replace(/\.git$/i, '');
+    return `${parsed.protocol}//${parsed.host}/${parts[0]}/${repo}`;
+  }
+
+  return repoUrl;
+}
+
+export async function cloneRepository(repoUrl: string, config: AppConfig): Promise<string> {
+  const cloneUrl = normalizeRepoUrlForClone(repoUrl);
 
   const baseDir = await mkdtemp(join(tmpdir(), 'ai-detector-'));
   const targetDir = join(baseDir, 'repo');
 
   try {
-    await runCommand('git', ['clone', '--depth', String(config.CLONE_DEPTH), repoUrl, targetDir], {
+    await runCommand('git', ['clone', '--depth', String(config.CLONE_DEPTH), cloneUrl, targetDir], {
       timeoutMs: config.CLONE_TIMEOUT_MS
     });
     await assertRepoWithinLimit(targetDir, config.MAX_REPO_BYTES);
