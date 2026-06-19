@@ -27,6 +27,8 @@ describe('sampler helpers', () => {
   it('ignores dependency dirs and lockfiles', () => {
     expect(shouldIgnorePath('node_modules/pkg/index.js')).toBe(true);
     expect(shouldIgnorePath('package-lock.json')).toBe(true);
+    expect(shouldIgnorePath('assets/css/bootstrap.min.css')).toBe(true);
+    expect(shouldIgnorePath('public/app.min.js')).toBe(true);
     expect(shouldIgnorePath('src/index.ts')).toBe(false);
   });
 
@@ -52,13 +54,14 @@ describe('sampler helpers', () => {
       [
         { path: 'README.md', language: 'Markdown', category: 'documentation', bytes: 100, priority: 100 },
         { path: 'package.json', language: 'JSON', category: 'config', bytes: 100, priority: 100 },
-        { path: 'src/index.ts', language: 'TypeScript', category: 'source', bytes: 100, priority: 38 },
-        { path: 'src/server.ts', language: 'TypeScript', category: 'source', bytes: 100, priority: 38 }
+        { path: 'src/index.ts', language: 'TypeScript', category: 'source', bytes: 100, priority: 95 },
+        { path: 'core/transcribe.py', language: 'Python', category: 'source', bytes: 100, priority: 90 }
       ],
       2
     );
 
     expect(prioritized.some((file) => file.category === 'source')).toBe(true);
+    expect(prioritized[0]?.category).toBe('source');
   });
 
   it('skips tracked gitlink directories', async () => {

@@ -132,10 +132,13 @@ export function parseModelAssessment(content: string): ModelAssessment {
     throw new ReviewServiceError('model_failed', 'OpenRouter returned an invalid assessment shape', 502);
   }
 
+  const confidence = Math.max(0, Math.min(100, Math.round(assessment.confidence)));
+  const triage = normalizeTriage(confidence);
+
   return {
-    confidence: Math.max(0, Math.min(100, Math.round(assessment.confidence))),
-    risk_level: assessment.risk_level,
-    review_recommendation: assessment.review_recommendation,
+    confidence,
+    risk_level: triage.risk_level,
+    review_recommendation: triage.review_recommendation,
     ai_assistance_likelihood: Math.max(0, Math.min(100, Math.round(assessment.ai_assistance_likelihood))),
     disclosed_ai_use: assessment.disclosed_ai_use,
     disclosure_evidence: assessment.disclosure_evidence
@@ -167,6 +170,34 @@ export function sanitizeOpenRouterError(text: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 1_000);
+}
+
+export function normalizeTriage(confidence: number): Pick<ModelAssessment, 'risk_level' | 'review_recommendation'> {
+  if (confidence >= 70) {
+    return {
+      risk_level: 'high',
+      review_recommendation: 'review_high_priority'
+    };
+  }
+
+  if (confidence >= 50) {
+    return {
+      risk_level: 'moderate',
+      review_recommendation: 'review_recommended'
+    };
+  }
+
+  if (confidence >= 30) {
+    return {
+      risk_level: 'low',
+      review_recommendation: 'review_optional'
+    };
+  }
+
+  return {
+    risk_level: 'low',
+    review_recommendation: 'skip'
+  };
 }
 
 function buildPrompt(input: ModelAssessmentInput): string {

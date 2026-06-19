@@ -30,6 +30,10 @@ const IGNORED_BASENAMES = new Set([
   'poetry.lock'
 ]);
 
+const MINIFIED_ASSET_RE = /\.min\.(?:css|js)$/i;
+const CENTRAL_SOURCE_RE = /^(?:app|cli|core|server|src|tasks|web)\//i;
+const TASK_FILE_RE = /(^|\/)(tasks?|worker|jobs?|commands?)\.[^.]+$/i;
+
 const LANGUAGE_BY_EXT: Record<string, string> = {
   '.js': 'JavaScript',
   '.jsx': 'JavaScript',
@@ -160,6 +164,10 @@ export function shouldIgnorePath(path: string): boolean {
     return true;
   }
 
+  if (MINIFIED_ASSET_RE.test(basename(path))) {
+    return true;
+  }
+
   return IGNORED_BASENAMES.has(basename(path));
 }
 
@@ -186,17 +194,22 @@ export function detectLanguage(path: string, content?: Buffer): string | null {
 }
 
 function scorePath(path: string): number {
-  if (MANIFEST_RE.test(path)) {
-    return 100;
+  if (ENTRYPOINT_RE.test(path)) {
+    return 95;
   }
 
-  if (ENTRYPOINT_RE.test(path)) {
-    return 80;
+  const language = detectLanguage(path);
+  const isSource = language && !['Markdown', 'JSON', 'YAML', 'TOML', 'Dockerfile'].includes(language);
+  if (isSource && (CENTRAL_SOURCE_RE.test(path) || TASK_FILE_RE.test(path))) {
+    return 90;
+  }
+
+  if (MANIFEST_RE.test(path)) {
+    return 85;
   }
 
   const depthPenalty = path.split('/').length;
-  const language = detectLanguage(path);
-  const sourceBonus = language && !['Markdown', 'JSON', 'YAML', 'TOML'].includes(language) ? 40 : 20;
+  const sourceBonus = isSource ? 60 : 20;
   return sourceBonus - depthPenalty;
 }
 
@@ -219,22 +232,25 @@ export function categorizeFile(path: string, language: string): SampledFile['cat
 
 export function prioritizeCandidates(candidates: CandidateFile[], maxFilesSampled: number): CandidateFile[] {
   const byPriority = [...candidates].sort((a, b) => b.priority - a.priority || a.path.localeCompare(b.path));
-  const selected = new Map<string, CandidateFile>();
+  const selectedSources = new Map<string, CandidateFile>();
+  const selectedRemainder = new Map<string, CandidateFile>();
   const sourceCandidates = byPriority.filter((file) => file.category === 'source');
   const minimumSourceFiles = Math.min(sourceCandidates.length, Math.max(1, Math.floor(maxFilesSampled / 2)));
 
   for (const file of sourceCandidates.slice(0, minimumSourceFiles)) {
-    selected.set(file.path, file);
+    selectedSources.set(file.path, file);
   }
 
   for (const file of byPriority) {
-    if (selected.size >= maxFilesSampled) {
+    if (selectedSources.size + selectedRemainder.size >= maxFilesSampled) {
       break;
     }
-    selected.set(file.path, file);
+    if (!selectedSources.has(file.path)) {
+      selectedRemainder.set(file.path, file);
+    }
   }
 
-  return Array.from(selected.values()).sort((a, b) => b.priority - a.priority || a.path.localeCompare(b.path));
+  return [...selectedSources.values(), ...selectedRemainder.values()];
 }
 
 function isLikelyBinary(buffer: Buffer): boolean {
