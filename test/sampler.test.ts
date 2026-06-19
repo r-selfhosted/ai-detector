@@ -10,6 +10,9 @@ describe('sampler helpers', () => {
   it('detects common source and docs languages', () => {
     expect(detectLanguage('README.md')).toBe('Markdown');
     expect(detectLanguage('src/server.ts')).toBe('TypeScript');
+    expect(detectLanguage('podman-version-updater.sh')).toBe('Shell');
+    expect(detectLanguage('install', Buffer.from('#!/usr/bin/env bash\nset -e'))).toBe('Shell');
+    expect(detectLanguage('entrypoint', Buffer.from('#!/bin/sh\nset -e'))).toBe('Shell');
     expect(detectLanguage('Dockerfile')).toBe('Dockerfile');
     expect(detectLanguage('image.png')).toBeNull();
   });
@@ -17,6 +20,7 @@ describe('sampler helpers', () => {
   it('categorizes reviewable files', () => {
     expect(categorizeFile('README.md', 'Markdown')).toBe('documentation');
     expect(categorizeFile('docker-compose.yml', 'YAML')).toBe('config');
+    expect(categorizeFile('podman-version-updater.sh', 'Shell')).toBe('source');
     expect(categorizeFile('src/server.ts', 'TypeScript')).toBe('source');
   });
 

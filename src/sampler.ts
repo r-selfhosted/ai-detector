@@ -49,6 +49,9 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
   '.cpp': 'C++',
   '.c': 'C',
   '.h': 'C/C++ Header',
+  '.sh': 'Shell',
+  '.bash': 'Shell',
+  '.zsh': 'Shell',
   '.css': 'CSS',
   '.scss': 'SCSS',
   '.html': 'HTML',
@@ -82,18 +85,18 @@ export async function sampleRepository(repoPath: string, config: AppConfig): Pro
       continue;
     }
 
-    const language = detectLanguage(path);
+    const absolutePath = join(repoPath, path);
+    const fileStat = await stat(absolutePath);
+    const buffer = await readFile(absolutePath);
+    const language = detectLanguage(path, buffer);
     if (!language) {
       continue;
     }
 
-    const absolutePath = join(repoPath, path);
-    const fileStat = await stat(absolutePath);
     if (fileStat.size > config.MAX_FILE_BYTES) {
       continue;
     }
 
-    const buffer = await readFile(absolutePath);
     if (isLikelyBinary(buffer)) {
       continue;
     }
@@ -156,7 +159,7 @@ export function shouldIgnorePath(path: string): boolean {
   return IGNORED_BASENAMES.has(basename(path));
 }
 
-export function detectLanguage(path: string): string | null {
+export function detectLanguage(path: string, content?: Buffer): string | null {
   const base = basename(path);
   if (/^README/i.test(base)) {
     return 'Markdown';
@@ -166,7 +169,16 @@ export function detectLanguage(path: string): string | null {
     return 'Dockerfile';
   }
 
-  return LANGUAGE_BY_EXT[extname(path)] ?? null;
+  const language = LANGUAGE_BY_EXT[extname(path)];
+  if (language) {
+    return language;
+  }
+
+  if (content && hasScriptShebang(content)) {
+    return 'Shell';
+  }
+
+  return null;
 }
 
 function scorePath(path: string): number {
@@ -182,6 +194,11 @@ function scorePath(path: string): number {
   const language = detectLanguage(path);
   const sourceBonus = language && !['Markdown', 'JSON', 'YAML', 'TOML'].includes(language) ? 40 : 20;
   return sourceBonus - depthPenalty;
+}
+
+function hasScriptShebang(buffer: Buffer): boolean {
+  const firstLine = buffer.subarray(0, Math.min(buffer.length, 128)).toString('utf8').split('\n')[0] ?? '';
+  return /^#!\s*\/(?:(?:usr\/bin\/env\s+)|(?:usr\/bin\/)|(?:bin\/))?(?:ba|z|k)?sh\b/.test(firstLine);
 }
 
 export function categorizeFile(path: string, language: string): SampledFile['category'] {
