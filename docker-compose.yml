@@ -2,7 +2,7 @@ services:
   review-service:
     build:
       context: .
-    image: r-selfhosted/ai-detector-review-service:latest
+    image: ghcr.io/r-selfhosted/ai-detector:latest
     restart: unless-stopped
     env_file:
       - .env
