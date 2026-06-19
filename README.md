@@ -78,7 +78,8 @@ The response separates likely AI involvement from undisclosed-risk:
 - `disclosed_ai_use` and `disclosure_evidence`: whether the repo or comment disclosed AI use
 - `risk_level` and `review_recommendation`: moderator-facing triage fields
 - `sample_summary` and `limitations`: sampling coverage and caveats
+- `discord_summary`: a moderator-facing summary capped under Discord's 2000-character webhook `content` limit
 
 ## Windmill workflow
 
-Use Windmill to poll the r/selfhosted megathread, deduplicate comments, extract repository URLs, call `/review`, and route qualifying review results to Discord or moderator destinations.
+Use Windmill to poll the r/selfhosted megathread, deduplicate comments, extract repository URLs, call `/review`, and route qualifying review results to Discord or moderator destinations. For Discord webhook posts, use the service's `discord_summary` field as the message `content`; keep the full JSON response in Windmill logs/history for calibration.

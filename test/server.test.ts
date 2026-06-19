@@ -104,6 +104,7 @@ describe('server', () => {
       disclosed_ai_use: 'unknown',
       findings: ['README is generic'],
       limitations: ['Only documentation was sampled'],
+      discord_summary: expect.stringContaining('AI Detector: https://github.com/a/b'),
       repo_url: 'https://github.com/a/b',
       comment_id: 'abc123',
       comment_body: 'No AI was used.',

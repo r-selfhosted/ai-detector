@@ -3,6 +3,7 @@ import { cloneRepository, cleanupRepository } from './git.js';
 import { analyzeMetadata } from './metadata.js';
 import { assessWithModel } from './model.js';
 import { sampleRepository } from './sampler.js';
+import { buildDiscordSummary } from './discord-summary.js';
 import { Dependencies, ReviewRequestBody, ReviewSuccess } from './types.js';
 
 export const DISCLOSURE =
@@ -40,7 +41,7 @@ export async function reviewRepository(body: ReviewRequestBody, dependencies: De
       sample
     });
 
-    return {
+    const reviewWithoutSummary: Omit<ReviewSuccess, 'discord_summary'> = {
       confidence: assessment.confidence,
       risk_level: assessment.risk_level,
       review_recommendation: assessment.review_recommendation,
@@ -58,6 +59,11 @@ export async function reviewRepository(body: ReviewRequestBody, dependencies: De
       ...(body.comment_body ? { comment_body: body.comment_body } : {}),
       ...(body.comment_claimed_no_ai !== undefined ? { comment_claimed_no_ai: body.comment_claimed_no_ai } : {}),
       ...(body.author ? { author: body.author } : {})
+    };
+
+    return {
+      ...reviewWithoutSummary,
+      discord_summary: buildDiscordSummary(reviewWithoutSummary)
     };
   } finally {
     if (repoPath) {

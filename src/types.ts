@@ -50,6 +50,7 @@ export interface ReviewSuccess {
   limitations: string[];
   metadata_signals: MetadataSignals;
   sample_summary: SampleSummary;
+  discord_summary: string;
   disclosure: string;
   repo_url: string;
   comment_id?: string;
