@@ -1,4 +1,27 @@
-import { categorizeFile, detectLanguage, prioritizeCandidates, shouldIgnorePath } from '../src/sampler.js';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { AppConfig } from '../src/config.js';
+import { runCommand } from '../src/process.js';
+import { categorizeFile, detectLanguage, prioritizeCandidates, sampleRepository, shouldIgnorePath } from '../src/sampler.js';
+
+const config: AppConfig = {
+  OPENROUTER_API_KEY: 'or-key',
+  OPENROUTER_MODEL: 'model',
+  REVIEW_SERVICE_TOKEN: 'secret',
+  PORT: 8080,
+  HOST: '127.0.0.1',
+  CLONE_DEPTH: 50,
+  CLONE_TIMEOUT_MS: 60_000,
+  MAX_REPO_BYTES: 1_000_000,
+  MAX_FILE_BYTES: 100_000,
+  MAX_FILES_SCANNED: 100,
+  MAX_FILES_SAMPLED: 5,
+  MAX_SAMPLE_CHARS: 10_000,
+  OPENROUTER_TEMPERATURE: 0.1,
+  OPENROUTER_MAX_TOKENS: 1_000,
+  LOG_LEVEL: 'silent'
+};
 
 describe('sampler helpers', () => {
   it('ignores dependency dirs and lockfiles', () => {
@@ -36,5 +59,27 @@ describe('sampler helpers', () => {
     );
 
     expect(prioritized.some((file) => file.category === 'source')).toBe(true);
+  });
+
+  it('skips tracked gitlink directories', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'ai-detector-sampler-'));
+
+    try {
+      await runCommand('git', ['init'], { cwd: repoPath });
+      await writeFile(join(repoPath, 'README.md'), '# Test\n');
+      await mkdir(join(repoPath, 'submodule'));
+      await runCommand('git', ['add', 'README.md'], { cwd: repoPath });
+      await runCommand(
+        'git',
+        ['update-index', '--add', '--cacheinfo', '160000,0123456789012345678901234567890123456789,submodule'],
+        { cwd: repoPath }
+      );
+
+      const sample = await sampleRepository(repoPath, config);
+
+      expect(sample.files.map((file) => file.path)).toEqual(['README.md']);
+    } finally {
+      await rm(repoPath, { recursive: true, force: true });
+    }
   });
 });

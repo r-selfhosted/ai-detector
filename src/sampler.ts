@@ -87,6 +87,10 @@ export async function sampleRepository(repoPath: string, config: AppConfig): Pro
 
     const absolutePath = join(repoPath, path);
     const fileStat = await stat(absolutePath);
+    if (!fileStat.isFile()) {
+      continue;
+    }
+
     const buffer = await readFile(absolutePath);
     const language = detectLanguage(path, buffer);
     if (!language) {
