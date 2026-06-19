@@ -83,3 +83,5 @@ The response separates likely AI involvement from undisclosed-risk:
 ## Windmill workflow
 
 Use Windmill to poll the r/selfhosted megathread, deduplicate comments, extract repository URLs, call `/review`, and route qualifying review results to Discord or moderator destinations. For Discord webhook posts, use the service's `discord_summary` field as the message `content`; keep the full JSON response in Windmill logs/history for calibration.
+
+A copy-pasteable Windmill script is maintained at `windmill-scripts/r-selfhosted-ai-detector.ts`.
