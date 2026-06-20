@@ -167,16 +167,41 @@ function extractRepoUrls(body: string): string[] {
   const pattern =
     /https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?|https?:\/\/git\.sr\.ht\/[~A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?/gi;
 
-  return [...new Set((body.match(pattern) || []).map((url) => url.replace(/[.,;:]+$/, "")))];
+  return [...new Set((body.match(pattern) || []).map(cleanRepoUrl))];
 }
 
 function stripHtml(html: string): string {
   return html
+    .replace(/<a\b[^>]*\bhref=(["'])(.*?)\1[^>]*>[\s\S]*?<\/a>/gi, " $2 ")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function cleanRepoUrl(url: string): string {
+  const cleaned = url.replace(/[.,;:]+$/, "");
+
+  try {
+    const parsed = new URL(cleaned);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+
+    if (["github.com", "gitlab.com", "codeberg.org"].includes(host) && parts.length >= 2) {
+      const repo = parts[1].replace(/\.git$/i, "");
+      return `${parsed.protocol}//${host}/${parts[0]}/${repo}`;
+    }
+
+    if (host === "git.sr.ht" && parts.length >= 2) {
+      const repo = parts[1].replace(/\.git$/i, "");
+      return `${parsed.protocol}//${host}/${parts[0]}/${repo}`;
+    }
+  } catch {
+    // Fall back to the regex match if URL parsing fails unexpectedly.
+  }
+
+  return cleaned;
 }
 
 function commentClaimsNoAi(body: string): boolean {
