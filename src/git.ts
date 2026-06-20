@@ -30,12 +30,12 @@ export function normalizeRepoUrlForClone(repoUrl: string): string {
   const parts = parsed.pathname.split('/').filter(Boolean);
 
   if (['github.com', 'gitlab.com', 'codeberg.org'].includes(host) && parts.length >= 2) {
-    const repo = parts[1].replace(/\.git$/i, '');
+    const repo = decodeURIComponent(parts[1]).replace(/\\/g, '').replace(/\.git$/i, '');
     return `${parsed.protocol}//${parsed.host}/${parts[0]}/${repo}`;
   }
 
   if (host === 'git.sr.ht' && parts.length >= 2) {
-    const repo = parts[1].replace(/\.git$/i, '');
+    const repo = decodeURIComponent(parts[1]).replace(/\\/g, '').replace(/\.git$/i, '');
     return `${parsed.protocol}//${parsed.host}/${parts[0]}/${repo}`;
   }
 

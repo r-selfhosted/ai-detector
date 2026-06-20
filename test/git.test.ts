@@ -17,6 +17,12 @@ describe('normalizeRepoUrlForClone', () => {
     expect(normalizeRepoUrlForClone('https://git.sr.ht/~user/project/tree/main/item')).toBe('https://git.sr.ht/~user/project');
   });
 
+  it('normalizes Reddit-escaped underscores in repository names', () => {
+    expect(normalizeRepoUrlForClone('https://github.com/ray910408/Universal%5C_Clipboard/releases')).toBe(
+      'https://github.com/ray910408/Universal_Clipboard'
+    );
+  });
+
   it('rejects URLs with credentials', () => {
     expect(() => normalizeRepoUrlForClone('https://user:pass@github.com/owner/repo')).toThrow(ReviewServiceError);
   });

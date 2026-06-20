@@ -165,9 +165,10 @@ function extractCommentId(entry: FeedEntry): string {
 
 function extractRepoUrls(body: string): string[] {
   const pattern =
-    /https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?|https?:\/\/git\.sr\.ht\/[~A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?/gi;
+    /https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.%\\-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?|https?:\/\/git\.sr\.ht\/[~A-Za-z0-9_.-]+\/[A-Za-z0-9_.%\\-]+(?:\.git)?(?:[/?#][^\s)\]}>'"]*)?/gi;
+  const normalizedBody = body.replace(/%5[Cc]_/g, "_").replace(/\\_/g, "_");
 
-  return [...new Set((body.match(pattern) || []).map(cleanRepoUrl))];
+  return [...new Set((normalizedBody.match(pattern) || []).map(cleanRepoUrl))];
 }
 
 function stripHtml(html: string): string {
@@ -189,12 +190,12 @@ function cleanRepoUrl(url: string): string {
     const parts = parsed.pathname.split("/").filter(Boolean);
 
     if (["github.com", "gitlab.com", "codeberg.org"].includes(host) && parts.length >= 2) {
-      const repo = parts[1].replace(/\.git$/i, "");
+      const repo = decodeURIComponent(parts[1]).replace(/\\/g, "").replace(/\.git$/i, "");
       return `${parsed.protocol}//${host}/${parts[0]}/${repo}`;
     }
 
     if (host === "git.sr.ht" && parts.length >= 2) {
-      const repo = parts[1].replace(/\.git$/i, "");
+      const repo = decodeURIComponent(parts[1]).replace(/\\/g, "").replace(/\.git$/i, "");
       return `${parsed.protocol}//${host}/${parts[0]}/${repo}`;
     }
   } catch {
